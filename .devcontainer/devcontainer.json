@@ -1,0 +1,14 @@
+{
+  "name": "Cli-Apps-Workspace",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "extensions": [
+    "ms-python.python",
+    "ms-python.black-formatter",
+    "amazonwebservices.aws-toolkit-vscode",
+    "mark-tucker.aws-cli-configure",
+    "Boto3typed.boto3-ide"
+  ],
+  "service": "python",
+  "workspaceFolder": "/code",
+  "mounts": ["source=${env:HOME}/.aws,target=/root/.aws,type=bind"]
+}
