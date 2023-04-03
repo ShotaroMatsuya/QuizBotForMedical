@@ -1,0 +1,75 @@
+[
+  {
+    "chapter_code": "A",
+    "id": 1,
+    "q": "***食道癌***の危険因子として喫煙がある．",
+    "kind": "ChoiceBool",
+    "a": ["はい"],
+    "secondary_a": [],
+    "comment": "喫煙の他，飲酒や高塩食，熱い食事の常用などがリスク",
+    "hint": "関連問題：97E49 93E13 93D6"
+  },
+  {
+    "chapter_code": "A",
+    "id": 2,
+    "q": "腹腔鏡の写真を示す。矢印の***臓器***はなにか",
+    "kind": "Image",
+    "image": "https://lex-demo-buckets-qb.s3.amazonaws.com/108E021.jpg",
+    "a": ["結腸", "横行結腸", "上行結腸", "下行結腸"],
+    "secondary_a": ["大腸", "盲腸", "S状結腸", "ヒモ"],
+    "comment": "結腸ひもがあるので***結腸***です",
+    "hint": "漢字2文字で"
+  },
+  {
+    "chapter_code": "A",
+    "id": 3,
+    "q": "***内痔核***の基本術式は「ligation and <u>(　　　　　)</u>（LE）」という。<br> ***(　)***に入るのは何？",
+    "a": ["excision", "Excision"],
+    "secondary_a": [],
+    "kind": "Desc",
+    "comment": "基本術式の結紮切除術とは，痔核に流入している血管を結紮して痔核を切除する方法で，ligation and excision（LE）とよばれている",
+    "hint": "関連問題：108D11"
+  },
+  {
+    "chapter_code": "A",
+    "id": 4,
+    "q": "発赤，腫脹および疼痛が強い***肛門周囲膿瘍***でまず行うべき対応は?",
+    "a": ["切開排膿ドレナージ", "切開", "排膿ドレナージ", "ドレナージ", "排膿"],
+    "secondary_a": ["絶食"],
+    "kind": "Desc",
+    "comment": "膿瘍は排膿が基本です",
+    "hint": "関連問題：107I9"
+  },
+  {
+    "chapter_code": "A",
+    "id": 5,
+    "q": "腹部単純X線画像にて腸閉塞に見られる***小腸ガス像***を何というか?",
+    "a": ["niveau", "Niveau", "ニボー"],
+    "secondary_a": [],
+    "kind": "Image",
+    "comment": "右下腹部に，Kerckring襞がみられる拡張した小腸ガスを認め，niveauを形成している．腸閉塞の所見である．",
+    "hint": "右下腹部に，Kerckring襞がみられる拡張した小腸ガスを認める。腸閉塞の所見である。",
+    "image": "https://lex-demo-buckets-qb.s3.amazonaws.com/109A037A.jpg"
+  },
+  {
+    "chapter_code": "A",
+    "id": 6,
+    "q": "腸軸捻転は，S状結腸に生じることが最も多い？",
+    "a": ["はい"],
+    "secondary_a": [],
+    "kind": "ChoiceBool",
+    "comment": "腸軸捻転は，S状結腸に生じることが最も多く，次いで盲腸，小腸の順",
+    "hint": "関連問題：111I28"
+  },
+  {
+    "chapter_code": "A",
+    "id": 7,
+    "q": "胃の正常組織のH-E染色標本を次に示す。<br>粘膜下層はどれ？",
+    "a": ["3", "３", "③", "さん"],
+    "secondary_a": [],
+    "kind": "Image",
+    "comment": "①粘膜層, ②粘膜筋板, ③粘膜下層, ④固有筋層, ⑤漿膜下層",
+    "hint": "粘膜下層までにとどまるものは早期胃癌，固有筋層以下に浸潤したものは進行胃癌に分類される",
+    "image": "https://lex-demo-buckets-qb.s3.amazonaws.com/114C025.jpg"
+  }
+]

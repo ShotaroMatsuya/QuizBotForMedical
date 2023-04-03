@@ -1,0 +1,3 @@
+[console_scripts]
+import_csv = csv_import:cmd
+import_json = json_import:cmd
