@@ -3,9 +3,19 @@ import logging
 import os
 import random
 import time
+from decimal import Decimal
+
+import boto3
+from boto3.dynamodb.conditions import Key
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
+
+
+def decimal_default_proc(obj):
+    if isinstance(obj, Decimal):
+        return int(obj)
+    raise TypeError
 
 
 def try_ex(func):
@@ -153,13 +163,13 @@ def build_options(slot):
         ]
     elif slot == "QuestionNum":
         return [
+            {"text": "3問", "value": 3},
             {"text": "5問", "value": 5},
-            {"text": "10問", "value": 10},
-            {"text": "15問", "value": 15},
+            {"text": "7問", "value": 7},
         ]
     elif slot == "Confirmation":
         return [
-            {"text": "もちろん!", "value": "Start QB Bot Quiz"},
+            {"text": "もちろん!", "value": "Start QuizBot"},
             {"text": "忙しくて。。。", "value": "いいえ"},
         ]
     elif slot == "ResultConfirmation":
@@ -184,7 +194,7 @@ def build_validation_result(is_valid, violated_slot, message_content):
 
 def validate_chapter_value(chapter_code, question_num):
     valid_chapters = ["A", "B", "C"]
-    valid_question_num = ["5", "10", "15"]
+    valid_question_num = ["3", "5", "7"]
     print(f"chapter: {chapter_code}, max_question: {question_num}")
     if not chapter_code:
         return build_validation_result(False, "ChapterCode", "Chapterを選んでください")
@@ -368,42 +378,40 @@ def build_question_card(quiz, subtitle, current_num):
     return question_card
 
 
-def set_quiz(chapter_code, question_num):
+def fetch_quiz_set(chapter_code, question_num):
+    table_name = os.environ.get("DYNAMODB_TABLE", "QuizTable")
+    region = os.environ.get("REGION_NAME", "us-east-1")
+
+    quiz_table = boto3.resource("dynamodb", region_name=region)
+    table = quiz_table.Table(table_name)
+
+    response = table.query(KeyConditionExpression=Key("chapter_code").eq(chapter_code))
+
+    print(":::::==>>>", response)
+
     print("{}章から{}問取得する".format(chapter_code, question_num))
-    quiz_list = [
-        {
-            "id": 1,
-            "q": "***食道癌***の危険因子として喫煙がある．",
-            "kind": "ChoiceBool",
-            "a": ["はい"],
-            "secondary_a": [],
-            "comment": "喫煙の他，飲酒や高塩食，熱い食事の常用などがリスク",
-            "hint": "関連問題：97E49 93E13 93D6",
-        },
-        {
-            "id": 2,
-            "q": "腹腔鏡の写真を示す。矢印の***臓器***はなにか",
-            "kind": "Image",
-            "image": "https://lex-demo-buckets-qb.s3.amazonaws.com/108E021.jpg",
-            "a": ["結腸", "横行結腸", "上行結腸", "下行結腸"],
-            "secondary_a": ["大腸", "盲腸", "S状結腸", "ヒモ"],
-            "comment": "結腸ひもがあるので***結腸***です",
-            "hint": "漢字2文字で",
-        },
-        {
-            "id": 3,
-            "q": """ WHO憲章前文に述べられている健康の定義を示す．  
-            Health is a state of complete physical, mental and social well-being and not merely the absence of disease or <u>（　　　　　）</u> .  
-            ***(　)に入るのは何？***""",
-            "a": ["infirmity", "Infirmity"],
-            "secondary_a": ["weakness", "feebleness", "imbecility"],
-            "kind": "Desc",
-            "comment": """「健康とは単に疾病がないとか，***虚弱***でないということではなく，<br />
-            身体的・精神的・社会的に完全に良好な状態である」と訳される""",
-            "hint": "関連問題：109H20",
-        },
+    quiz_sets = response["Items"]
+    random.shuffle(quiz_sets)
+    quiz_list = json.loads(json.dumps(quiz_sets, default=decimal_default_proc))[
+        : int(question_num)
     ]
-    return quiz_list
+    quiz_id_list = [str(d.get("id")) for d in quiz_list]
+    return quiz_id_list
+
+
+def set_quiz(chapter_code, q_id_list, current_num):
+    table_name = os.environ.get("DYNAMODB_TABLE", "QuizTable")
+    region = os.environ.get("REGION_NAME", "us-east-1")
+
+    quiz_table = boto3.resource("dynamodb", region_name=region)
+    table = quiz_table.Table(table_name)
+
+    response = table.query(
+        KeyConditionExpression=Key("chapter_code").eq(chapter_code)
+        & Key("id").eq(int(q_id_list[current_num]))
+    )
+    print(":::::==>>>", response["Items"])
+    return json.loads(json.dumps(response["Items"], default=decimal_default_proc))[0]
 
 
 def update_exam_state_info(exam_state_info, quiz, current_num, result_value):
@@ -448,8 +456,10 @@ def judge_answer(quiz, answer, exam_state_info, current_num):
 
 # is_canceled, is_displayed_results
 def start_quiz(intent_request):
-    is_canceled = get_slot(intent_request, "IsCanceled")
-    is_displayed_results = get_slot(intent_request, "IsDisplayedResults")
+    is_canceled = True if get_slot(intent_request, "IsCanceled") == "True" else False
+    is_displayed_results = (
+        True if get_slot(intent_request, "IsDisplayedResults") == "True" else False
+    )
     answer = get_slot(intent_request, "Answer")
 
     slots = get_slots(intent_request)
@@ -484,19 +494,32 @@ def start_quiz(intent_request):
                 "max_num": question_num,
                 "current_num": 0,
                 "results": [],
+                "q_list": [],
             }
         )
     )
     is_finished = exam_state_info["is_finished"]
     current_num = exam_state_info["current_num"]
     results_history_list = exam_state_info["results"]
+    q_id_list = exam_state_info["q_list"]
 
     # キャンセル時の対応
     print("is_finished:", is_finished)
 
     # 結果発表時の対応
-    if is_finished is True:
-        max_question = 3  # 暫定的
+    if is_finished is True and is_displayed_results is False:
+        print("結果を非表示で終了")
+        clear_session_attributes(intent_request)
+        return close(
+            intent_request,
+            {},
+            "Fulfilled",
+            [
+                {"contentType": "PlainText", "content": "そうだよね。。。おつかれ！じゃあまたね！👋"},
+            ],
+        )
+    elif is_finished is True and is_displayed_results is True:
+        max_question = int(question_num)
         correct_q_count = len(
             list(
                 filter(
@@ -505,7 +528,6 @@ def start_quiz(intent_request):
             )
         )
 
-        print(correct_q_count)
         if correct_q_count == max_question:
             text = "すごい全問正解！！"
         elif correct_q_count == 0:
@@ -521,28 +543,23 @@ def start_quiz(intent_request):
                 {
                     "contentType": "CustomPayload",
                     "content": f"""{user_name}さんの結果... 
-                3問中.. {correct_q_count}問正解！！
+                {max_question}問中.. {correct_q_count}問正解！！
                 {text}
                 """,
                 },
-                {"contentType": "PlainText", "content": "じゃあまたね！"},
+                {"contentType": "PlainText", "content": "じゃあまたね！👋"},
             ],
         )
 
-    q_list = set_quiz(chapter_code, question_num)
-    print("現在の問題", q_list[current_num])
     source = intent_request["invocationSource"]
-    print(source)
     if source == "DialogCodeHook":
         if is_canceled is True:
             print("終了")
         if is_finished is not True:
-
             if answer is not None:
                 # answerのバリデーション処理
-                validation_result = validate_answer_value(
-                    answer, q_list[current_num]["kind"]
-                )
+                q_item = set_quiz(chapter_code, q_id_list, current_num)
+                validation_result = validate_answer_value(answer, q_item["kind"])
                 if not validation_result["isValid"]:
                     print("answerのバリデーション処理", validation_result)
                     slots[validation_result["violatedSlot"]] = None
@@ -559,26 +576,26 @@ def start_quiz(intent_request):
                             }
                         ],
                         build_question_card(
-                            q_list[current_num],
+                            q_item,
                             validation_result["message"]["content"],
                             current_num,
                         ),
                     )
-                    print(response)
                     return response
 
                 # 判定処理（結果メッセージ+解説メッセージを受け取り、stateを更新している）
                 [exam_state_info, message] = judge_answer(
-                    q_list[current_num], answer, exam_state_info, current_num
+                    q_item, answer, exam_state_info, current_num
                 )
                 print(exam_state_info, message)
                 # slot(Answer)を空に、current_num更新してelicit_slot
                 output_session_attributes["examState"] = json.dumps(exam_state_info)
 
-                if (current_num + 1) < 3:  # 暫定的に3問のみ
+                if (current_num + 1) < int(question_num):
                     # 次の問題があれば問題を作成する
                     slots["Answer"] = None
                     current_num += 1
+                    q_item = set_quiz(chapter_code, q_id_list, current_num)
                     response = elicit_slot(
                         intent_request,
                         output_session_attributes,
@@ -589,12 +606,12 @@ def start_quiz(intent_request):
                             {"contentType": "CustomPayload", "content": f"{message}"},
                             {
                                 "contentType": "CustomPayload",
-                                "content": f"第{current_num + 1}問：{q_list[current_num]['q']}",
+                                "content": f"第{current_num + 1}問：{q_item['q']}",
                             },
                         ],
                         build_question_card(
-                            q_list[current_num],
-                            f"ヒント：{q_list[current_num]['hint']}",
+                            q_item,
+                            f"ヒント：{q_item['hint']}",
                             current_num,
                         ),
                     )
@@ -625,10 +642,22 @@ def start_quiz(intent_request):
                             build_options("ResultConfirmation"),
                         ),
                     )
-                print(response)
                 return response
+            if len(q_id_list) == 0:
+                q_id_list = fetch_quiz_set(chapter_code, question_num)
+                exam_state_info = json.dumps(
+                    {
+                        "is_finished": False,
+                        "max_num": question_num,
+                        "current_num": 0,
+                        "results": [],
+                        "q_list": q_id_list,
+                    }
+                )
 
-            print("出題")
+                output_session_attributes["examState"] = exam_state_info
+            q_item = set_quiz(chapter_code, q_id_list, current_num)
+            print("出題", q_item)
             # 出題カード作成
             response = elicit_slot(
                 intent_request,
@@ -640,21 +669,17 @@ def start_quiz(intent_request):
                     {"contentType": "PlainText", "content": f"{chapter_code}章からの出題"},
                     {
                         "contentType": "CustomPayload",
-                        "content": f"第{current_num + 1}問：{q_list[current_num]['q']}",
+                        "content": f"第{current_num + 1}問：{q_item['q']}",
                     },
                 ],
                 build_question_card(
-                    q_list[current_num],
-                    f"ヒント：{q_list[current_num]['hint']}",
+                    q_item,
+                    f"ヒント：{q_item['hint']}",
                     current_num,
                 ),
             )
-            print(response)
             return response
 
-        print(user_name)
-        print(chapter_info)
-        print(exam_state_info)
         return delegate(
             output_session_attributes,
             intent_request["sessionState"]["intent"]["name"],
@@ -727,5 +752,6 @@ def lambda_handler(event, context):
 # a)初期応答(lexコンソールから設定)→slotプロンプト(lexコンソールから設定)
 # b)確認応答（lexコンソールから設定）→ confirm_intent(lambdaから)
 # c) messagesのリストに複数のcontentを追加すればよし
+# 3. カスタムslot タイプのBooleanも文字列として帰ってくるので注意
 
-# TODO: 1 途中離脱の方法(「やめる」と言ったら、セッション情報削除してclose) 2 ランダムに出題
+# TODO: 1 途中離脱の方法(「やめる」と言ったら、セッション情報削除してclose)
