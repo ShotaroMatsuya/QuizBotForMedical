@@ -497,66 +497,7 @@ Resources:
                 NextStep:
                   DialogAction:
                     Type: InvokeDialogCodeHook
-
-            # - Name: HogeIntent
-            #   # サンプル発話
-            #   SampleUtterances:
-            #     - Utterance: 花を注文
-            #     - Utterance: 花を注文します
-            #   # スロット
-            #   Slots:
-            #     - Name: FlowerType
-            #       SlotTypeName: Boolean
-            #       ValueElicitationSetting:
-            #         SlotConstraint: Required
-            #         PromptSpecification:
-            #           MaxRetries: 3
-            #           MessageGroupsList:
-            #             - Message:
-            #                 PlainTextMessage:
-            #                   Value: どのような花を注文しますか?
-            #     - Name: PickupDate
-            #       SlotTypeName: AMAZON.Date
-            #       ValueElicitationSetting:
-            #         SlotConstraint: Required
-            #         PromptSpecification:
-            #           MaxRetries: 3
-            #           MessageGroupsList:
-            #             - Message:
-            #                 PlainTextMessage:
-            #                   Value: 何日に {FlowerType} を受け取りますか?
-            #     - Name: PickupTime
-            #       SlotTypeName: AMAZON.Time
-            #       ValueElicitationSetting:
-            #         SlotConstraint: Required
-            #         PromptSpecification:
-            #           MaxRetries: 3
-            #           MessageGroupsList:
-            #             - Message:
-            #                 PlainTextMessage:
-            #                   Value: 何時に {FlowerType} を受け取りますか?
-            #   # スロットの優先順位
-            #   SlotPriorities:
-            #     - Priority: 1
-            #       SlotName: FlowerType
-            #     - Priority: 2
-            #       SlotName: PickupDate
-            #     - Priority: 3
-            #       SlotName: PickupTime
-            #   # 確認プロンプトと応答拒否
-            #   IntentConfirmationSetting:
-            #     PromptSpecification:
-            #       MaxRetries: 3
-            #       MessageGroupsList:
-            #         - Message:
-            #             PlainTextMessage:
-            #               Value: わかりました。{FlowerType} は {PickupDate} の {PickupTime} に受け取ることができます。これでよろしいですか?
-            #     DeclinationResponse:
-            #       MessageGroupsList:
-            #         - Message:
-            #             PlainTextMessage:
-            #               Value: それでは、注文は行いません。
-  BotVersion1:
+  BotVersion2:
     Type: AWS::Lex::BotVersion
     Properties:
       BotId: !Ref Bot
@@ -570,7 +511,7 @@ Resources:
     Properties:
       BotId: !Ref Bot
       BotAliasName: 'Prod'
-      BotVersion: !GetAtt BotVersion1.BotVersion
+      BotVersion: !GetAtt BotVersion2.BotVersion
       BotAliasLocaleSettings:
         - BotAliasLocaleSetting:
             CodeHookSpecification:
