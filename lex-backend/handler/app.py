@@ -125,13 +125,14 @@ def close(intent_request, session_attributes, fulfillment_state, message):
     }
 
 
-def delegate(session_attributes, intent_name, slots):
+def delegate(session_attributes, intent_name, slots, message=None):
     return {
         "sessionState": {
             "sessionAttributes": session_attributes,
             "dialogAction": {"type": "Delegate"},
             "intent": {"name": intent_name, "slots": slots},
-        }
+        },
+        "message": message,
     }
 
 
@@ -695,17 +696,19 @@ def welcome(intent_request):
     if user_name is not None:
         print("elicit intent(Welcome)", user_name)
         output_session_attributes["userInfo"] = user_name
-        return elicit_intent(
+
+        return close(
             intent_request,
             output_session_attributes,
+            "Fulfilled",
             [
                 {
                     "contentType": "CustomPayload",
                     "content": f"こんにちは！ ***{user_name}***さん。 <br /> 今日はどうなさいましたか？",
                 }
             ],
-            None,
         )
+
     else:
         print("Delegate!!(welcome)")
         return delegate(
