@@ -1,0 +1,11 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "lex-backend"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1adb5nevl06ao"
+s3_prefix = "lex-backend"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "BotName=\"QuizBot\" QuizTableName=\"QuizTable\" Region=\"us-east-1\""
+image_repositories = []

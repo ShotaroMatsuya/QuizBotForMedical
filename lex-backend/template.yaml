@@ -1,0 +1,576 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Lex V2 Bot Template
+Globals:
+  Function:
+    Timeout: 3
+    MemorySize: 128
+    Runtime: python3.9
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        DYNAMODB_TABLE: !Ref QuizTableName
+        REGION_NAME: !Ref Region
+Parameters:
+  BotName:
+    Description: Bot Name.
+    Type: String
+    Default: QuizBot
+  QuizTableName:
+    Description: DynamoDB Table Name
+    Type: String
+    Default: QuizTable
+  Region:
+    Type: String
+    Default: us-east-1
+Resources:
+  QuizTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: chapter_code
+          AttributeType: S
+        - AttributeName: id
+          AttributeType: N
+      KeySchema:
+        - AttributeName: chapter_code
+          KeyType: HASH
+        - AttributeName: id
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+      TableName: !Ref QuizTableName
+  BotFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: handler/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref QuizTableName
+        # - Version: '2012-10-17'
+        #   Statement:
+        #     - Effect: Allow
+        #       Action: 's3:*'
+        #       Resource: '*'
+        #     - Effect: Allow
+        #       Action:
+        #         - 'rekognition:CompareFaces'
+        #         - 'rekognition:DetectFaces'
+        #         - 'rekognition:DetectLabels'
+        #       Resource: '*'
+        #     - Effect: Allow
+        #       Action:
+        #         - 'rekognition:CreateCollection'
+        #         - 'rekognition:IndexFaces'
+        #       Resource: '*'
+
+  Bot:
+    Type: AWS::Lex::Bot
+    Properties:
+      DataPrivacy:
+        ChildDirected: false
+      IdleSessionTTLInSeconds: 300
+      Name: !Ref BotName
+      RoleArn: 'arn:aws:iam::528163014577:role/aws-service-role/lexv2.amazonaws.com/AWSServiceRoleForLexV2Bots_QXS73XOZR0P'
+      AutoBuildBotLocales: false
+      BotLocales:
+        - LocaleId: ja_JP
+          NluConfidenceThreshold: 0.4
+          # カスタムスロットタイプ
+          SlotTypes:
+            - Name: ChapterType
+              ValueSelectionSetting:
+                ResolutionStrategy: TOP_RESOLUTION
+              SlotTypeValues:
+                - SampleValue:
+                    Value: A
+                  Synonyms:
+                    - Value: '消化器'
+                    - Value: '消化管'
+                    - Value: '腸'
+                - SampleValue:
+                    Value: B
+                  Synonyms:
+                    - Value: '肝'
+                    - Value: '胆'
+                    - Value: '膵'
+                - SampleValue:
+                    Value: C
+                  Synonyms:
+                    - Value: '循環器'
+                    - Value: '心臓'
+                    - Value: '血管'
+            - Name: Boolean
+              ValueSelectionSetting:
+                ResolutionStrategy: TOP_RESOLUTION
+              SlotTypeValues:
+                - SampleValue:
+                    Value: 'True'
+                  Synonyms:
+                    - Value: 'はい'
+                    - Value: 'うん'
+                    - Value: 'OK'
+                    - Value: 'Yes'
+                    - Value: 'イエス'
+                    - Value: 'いいよ'
+                    - Value: 'お願い'
+                - SampleValue:
+                    Value: 'False'
+                  Synonyms:
+                    - Value: 'いいえ'
+                    - Value: 'いや'
+                    - Value: 'No'
+                    - Value: 'だめ'
+                    - Value: 'ノー'
+                    - Value: '無理'
+                    - Value: 'やめて'
+          # インテント
+          Intents:
+            - Name: FallbackIntent
+              ParentIntentSignature: AMAZON.FallbackIntent
+              IntentClosingSetting:
+                IsActive: true
+                ClosingResponse:
+                  MessageGroupsList:
+                    - Message:
+                        PlainTextMessage:
+                          Value: ごめんなさい。発言を認識できませんでした。表現を変えて再度お試しください。
+            - Name: CheckChapter
+              SampleUtterances:
+                - Utterance: 問題を解く
+                - Utterance: 出題してください
+                - Utterance: ミニテストをうける
+                - Utterance: 小テストを出してください
+                - Utterance: '{ChapterCode} の問題を出してください'
+                - Utterance: '{ChapterCode}章から出題してください'
+                - Utterance: '{ChapterCode}章から{QuestionNum} 題出題して'
+                - Utterance: '{QuestionNum}  問'
+                - Utterance: '{QuestionNum}  個出題して'
+                - Utterance: '{ChapterCode} から{QuestionNum}問'
+              IntentConfirmationSetting:
+                IsActive: true
+                DeclinationResponse:
+                  MessageGroupsList:
+                    - Message:
+                        PlainTextMessage:
+                          Value: キャンセルしました。またのお越しをお待ちしてます
+                  AllowInterrupt: true
+                CodeHook:
+                  IsActive: false
+                  EnableCodeHookInvocation: false
+                  PostCodeHookSpecification:
+                    FailureNextStep:
+                      DialogAction:
+                        Type: EndConversation
+                    TimeoutNextStep:
+                      DialogAction:
+                        Type: EndConversation
+                    SuccessNextStep:
+                      DialogAction:
+                        Type: FulfillIntent
+                PromptSpecification:
+                  MessageGroupsList:
+                    - Message:
+                        PlainTextMessage:
+                          Value: '{ChapterCode}章から{QuestionNum}題出題しますがよろしいですか？'
+                  MaxRetries: 4
+                  AllowInterrupt: true
+                  MessageSelectionStrategy: Random
+                FailureNextStep:
+                  DialogAction:
+                    Type: StartIntent
+                  Intent:
+                    Name: FallbackIntent
+                ElicitationCodeHook:
+                  EnableCodeHookInvocation: false
+                DeclinationNextStep:
+                  DialogAction:
+                    Type: EndConversation
+                ConfirmationNextStep:
+                  DialogAction:
+                    Type: FulfillIntent
+                ConfirmationResponse:
+                  MessageGroupsList:
+                    - Message:
+                        PlainTextMessage:
+                          Value: ご確認ありがとうございます
+                  AllowInterrupt: true
+              IntentClosingSetting:
+                IsActive: false
+                NextStep:
+                  DialogAction:
+                    Type: CloseIntent
+              InitialResponseSetting:
+                NextStep:
+                  DialogAction:
+                    Type: ElicitSlot
+                    SlotToElicit: ChapterCode
+                InitialResponse:
+                  MessageGroupsList:
+                    - Message:
+                        PlainTextMessage:
+                          Value: わかりました。一問一答テストをしましょう。
+                  AllowInterrupt: true
+              DialogCodeHook:
+                Enabled: true
+              FulfillmentCodeHook:
+                IsActive: true
+                PostFulfillmentStatusSpecification:
+                  FailureResponse:
+                    MessageGroupsList:
+                      - Message:
+                          PlainTextMessage:
+                            Value: エラーが発生しました
+                    AllowInterrupt: true
+                  FailureNextStep:
+                    DialogAction:
+                      Type: EndConversation
+                  TimeoutNextStep:
+                    DialogAction:
+                      Type: EndConversation
+                  SuccessNextStep:
+                    DialogAction:
+                      Type: EndConversation
+                  SuccessResponse:
+                    MessageGroupsList:
+                      - Message:
+                          PlainTextMessage:
+                            Value: リクエストを受け付けました。問題を出題します。
+                Enabled: true
+              SlotPriorities:
+                - Priority: 2
+                  SlotName: QuestionNum
+                - Priority: 1
+                  SlotName: ChapterCode
+              Slots:
+                - Name: ChapterCode
+                  SlotTypeName: ChapterType
+                  ValueElicitationSetting:
+                    SlotConstraint: Required
+                    SlotCaptureSetting:
+                      CaptureNextStep:
+                        DialogAction:
+                          Type: ElicitSlot
+                          SlotToElicit: QuestionNum
+                      FailureNextStep:
+                        DialogAction:
+                          Type: StartIntent
+                        Intent:
+                          Name: FallbackIntent
+                      ElicitationCodeHook:
+                        EnableCodeHookInvocation: true
+                    PromptSpecification:
+                      MaxRetries: 4
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: 出題する章をAからCで選んでください。
+                      AllowInterrupt: true
+                - Name: QuestionNum
+                  SlotTypeName: AMAZON.Number
+                  ValueElicitationSetting:
+                    SlotConstraint: Required
+                    SlotCaptureSetting:
+                      CaptureNextStep:
+                        DialogAction:
+                          Type: ElicitSlot
+                          SlotToElicit: ChapterCode
+                      FailureNextStep:
+                        DialogAction:
+                          Type: StartIntent
+                        Intent:
+                          Name: FallbackIntent
+                      ElicitationCodeHook:
+                        EnableCodeHookInvocation: true
+                    PromptSpecification:
+                      MaxRetries: 4
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: '問題数を5, 10 ,15から選んでください'
+
+            - Name: Welcome
+              SampleUtterances:
+                - Utterance: こんにちは
+                - Utterance: やあ
+              InitialResponseSetting:
+                CodeHook:
+                  IsActive: true
+                  EnableCodeHookInvocation: true
+                  PostCodeHookSpecification:
+                    FailureNextStep:
+                      DialogAction:
+                        Type: EndConversation
+                    TimeoutNextStep:
+                      DialogAction:
+                        Type: EndConversation
+                    SuccessNextStep:
+                      DialogAction:
+                        Type: ElicitSlot
+                        SlotToElicit: UserName
+                NextStep:
+                  DialogAction:
+                    Type: InvokeDialogCodeHook
+                InitialResponse:
+                  MessageGroupsList:
+                    - Message:
+                        PlainTextMessage:
+                          Value: おつかれさまです！医師国試クイズボットです！
+                  AllowInterrupt: true
+              DialogCodeHook:
+                Enabled: true
+              SlotPriorities:
+                - Priority: 1
+                  SlotName: UserName
+              Slots:
+                - Name: UserName
+                  SlotTypeName: AMAZON.FreeFormInput
+                  ValueElicitationSetting:
+                    SlotCaptureSetting:
+                      CaptureNextStep:
+                        DialogAction:
+                          Type: EndConversation
+                      FailureNextStep:
+                        DialogAction:
+                          Type: StartIntent
+                        Intent:
+                          Name: FallbackIntent
+                      ElicitationCodeHook:
+                        EnableCodeHookInvocation: true
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: あなたのファーストネームを教えて下さい！
+                      MaxRetries: 4
+                      AllowInterrupt: true
+                      MessageSelectionStrategy: Random
+                    SlotConstraint: Required
+            - Name: StartQuiz
+              SampleUtterances:
+                - Utterance: Start QB Bot Quiz
+              InitialResponseSetting:
+                CodeHook:
+                  IsActive: true
+                  EnableCodeHookInvocation: true
+                  PostCodeHookSpecification:
+                    FailureNextStep:
+                      DialogAction:
+                        Type: EndConversation
+                    TimeoutNextStep:
+                      DialogAction:
+                        Type: EndConversation
+                    SuccessNextStep:
+                      DialogAction:
+                        Type: EndConversation
+                NextStep:
+                  DialogAction:
+                    Type: InvokeDialogCodeHook
+              DialogCodeHook:
+                Enabled: true
+              SlotPriorities:
+                - Priority: 3
+                  SlotName: Answer
+                - Priority: 1
+                  SlotName: IsCanceled
+                - Priority: 2
+                  SlotName: IsDisplayedResults
+              Slots:
+                - Name: IsCanceled
+                  SlotTypeName: Boolean
+                  ValueElicitationSetting:
+                    SlotConstraint: Required
+                    SlotCaptureSetting:
+                      ElicitationCodeHook:
+                        EnableCodeHookInvocation: true
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: テストを中断しますか？
+                      MaxRetries: 4
+                      AllowInterrupt: true
+                      MessageSelectionStrategy: Random
+                - Name: Answer
+                  SlotTypeName: AMAZON.FreeFormInput
+                  ValueElicitationSetting:
+                    SlotConstraint: Required
+                    SlotCaptureSetting:
+                      ElicitationCodeHook:
+                        EnableCodeHookInvocation: true
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: 答えは？
+                      MaxRetries: 4
+                      AllowInterrupt: true
+                      MessageSelectionStrategy: Random
+                - Name: IsDisplayedResults
+                  SlotTypeName: Boolean
+                  ValueElicitationSetting:
+                    SlotConstraint: Required
+                    SlotCaptureSetting:
+                      CaptureNextStep:
+                        DialogAction:
+                          Type: EndConversation
+                      FailureNextStep:
+                        DialogAction:
+                          Type: StartIntent
+                        Intent:
+                          Name: FallbackIntent
+                      ElicitationCodeHook:
+                        EnableCodeHookInvocation: true
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: テスト結果を見ますか？
+                      MaxRetries: 4
+                      AllowInterrupt: true
+                      MessageSelectionStrategy: Random
+
+            - Name: Help
+              SampleUtterances:
+                - Utterance: Help
+              InitialResponseSetting:
+                NextStep:
+                  DialogAction:
+                    Type: EndConversation
+                InitialResponse:
+                  MessageGroupsList:
+                    - Message:
+                        PlainTextMessage:
+                          Value: 問題を出題してほしい場合は「出題して」といってください
+                  AllowInterrupt: true
+
+            - Name: FeedBack
+              SampleUtterances:
+                - Utterance: Thumbs down
+                - Utterance: Thumbs up
+              IntentClosingSetting:
+                IsActive: true
+                ClosingResponse:
+                  MessageGroupsList:
+                    - Message:
+                        PlainTextMessage:
+                          Value: フィードバックありがとう！また、来てね！✋
+                  AllowInterrupt: true
+                NextStep:
+                  DialogAction:
+                    Type: EndConversation
+              InitialResponseSetting:
+                CodeHook:
+                  IsActive: true
+                  EnableCodeHookInvocation: true
+                  PostCodeHookSpecification:
+                    FailureNextStep:
+                      DialogAction:
+                        Type: EndConversation
+                    TimeoutNextStep:
+                      DialogAction:
+                        Type: EndConversation
+                    SuccessNextStep:
+                      DialogAction:
+                        Type: CloseIntent
+                NextStep:
+                  DialogAction:
+                    Type: InvokeDialogCodeHook
+
+            # - Name: HogeIntent
+            #   # サンプル発話
+            #   SampleUtterances:
+            #     - Utterance: 花を注文
+            #     - Utterance: 花を注文します
+            #   # スロット
+            #   Slots:
+            #     - Name: FlowerType
+            #       SlotTypeName: Boolean
+            #       ValueElicitationSetting:
+            #         SlotConstraint: Required
+            #         PromptSpecification:
+            #           MaxRetries: 3
+            #           MessageGroupsList:
+            #             - Message:
+            #                 PlainTextMessage:
+            #                   Value: どのような花を注文しますか?
+            #     - Name: PickupDate
+            #       SlotTypeName: AMAZON.Date
+            #       ValueElicitationSetting:
+            #         SlotConstraint: Required
+            #         PromptSpecification:
+            #           MaxRetries: 3
+            #           MessageGroupsList:
+            #             - Message:
+            #                 PlainTextMessage:
+            #                   Value: 何日に {FlowerType} を受け取りますか?
+            #     - Name: PickupTime
+            #       SlotTypeName: AMAZON.Time
+            #       ValueElicitationSetting:
+            #         SlotConstraint: Required
+            #         PromptSpecification:
+            #           MaxRetries: 3
+            #           MessageGroupsList:
+            #             - Message:
+            #                 PlainTextMessage:
+            #                   Value: 何時に {FlowerType} を受け取りますか?
+            #   # スロットの優先順位
+            #   SlotPriorities:
+            #     - Priority: 1
+            #       SlotName: FlowerType
+            #     - Priority: 2
+            #       SlotName: PickupDate
+            #     - Priority: 3
+            #       SlotName: PickupTime
+            #   # 確認プロンプトと応答拒否
+            #   IntentConfirmationSetting:
+            #     PromptSpecification:
+            #       MaxRetries: 3
+            #       MessageGroupsList:
+            #         - Message:
+            #             PlainTextMessage:
+            #               Value: わかりました。{FlowerType} は {PickupDate} の {PickupTime} に受け取ることができます。これでよろしいですか?
+            #     DeclinationResponse:
+            #       MessageGroupsList:
+            #         - Message:
+            #             PlainTextMessage:
+            #               Value: それでは、注文は行いません。
+  BotVersion1:
+    Type: AWS::Lex::BotVersion
+    Properties:
+      BotId: !Ref Bot
+      BotVersionLocaleSpecification:
+        - LocaleId: ja_JP
+          BotVersionLocaleDetails:
+            SourceBotVersion: DRAFT
+
+  BotProd:
+    Type: AWS::Lex::BotAlias
+    Properties:
+      BotId: !Ref Bot
+      BotAliasName: 'Prod'
+      BotVersion: !GetAtt BotVersion1.BotVersion
+      BotAliasLocaleSettings:
+        - BotAliasLocaleSetting:
+            CodeHookSpecification:
+              LambdaCodeHook:
+                CodeHookInterfaceVersion: '1.0'
+                LambdaArn: !GetAtt BotFunction.Arn
+            Enabled: true
+          LocaleId: ja_JP
+# Outputs:
+# ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+# Find out more about other implicit resources you can reference within SAM
+# https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+# HelloWorldApi:
+#   Description: 'API Gateway endpoint URL for Prod stage for Hello World function'
+#   Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/'
+# HelloWorldFunction:
+#   Description: 'Hello World Lambda Function ARN'
+#   Value: !GetAtt HelloWorldFunction.Arn
+# HelloWorldFunctionIamRole:
+#   Description: 'Implicit IAM Role created for Hello World function'
+#   Value: !GetAtt HelloWorldFunctionRole.Arn
