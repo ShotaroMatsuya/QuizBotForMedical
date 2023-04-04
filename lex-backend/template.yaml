@@ -25,6 +25,13 @@ Parameters:
     Type: String
     Default: us-east-1
 Resources:
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName: !GetAtt BotFunction.Arn
+      Principal: lexv2.amazonaws.com
+      SourceArn: !GetAtt BotProd.Arn
   QuizTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -127,6 +134,17 @@ Resources:
                     - Value: 'ノー'
                     - Value: '無理'
                     - Value: 'やめて'
+            - Name: QuestionNum
+              ValueSelectionSetting:
+                ResolutionStrategy: ORIGINAL_VALUE
+              SlotTypeValues:
+                - SampleValue:
+                    Value: '3'
+                - SampleValue:
+                    Value: '5'
+                - SampleValue:
+                    Value: '7'
+
           # インテント
           Intents:
             - Name: FallbackIntent
@@ -270,7 +288,7 @@ Resources:
                               Value: 出題する章をAからCで選んでください。
                       AllowInterrupt: true
                 - Name: QuestionNum
-                  SlotTypeName: AMAZON.Number
+                  SlotTypeName: QuestionNum
                   ValueElicitationSetting:
                     SlotConstraint: Required
                     SlotCaptureSetting:
@@ -290,7 +308,7 @@ Resources:
                       MessageGroupsList:
                         - Message:
                             PlainTextMessage:
-                              Value: '問題数を5, 10 ,15から選んでください'
+                              Value: '問題数を3, 5 ,7から選んでください'
 
             - Name: Welcome
               SampleUtterances:
